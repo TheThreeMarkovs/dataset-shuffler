@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>GovHack 2017 Dataset Shuffler</title>
+
+<style>
+</style>
+  </head>
+  <body>
+    <label>Seed: <input type="number" id="seed"/></label>
+    <div id="jurisdictions"></div>
+    <button id="switch">Switcharoo</button>
+    <div id="display"></div>
+
+<script>
+const seedEl = document.getElementById('seed');
+const jurisDiv = document.getElementById('jurisdictions');
+const display = document.getElementById('display');
+const switc = document.getElementById('switch');
+
+let seed = 1;
+let datasets = null;
+let jurisdictions = null;
+let filteredDatasets = null;
+
+const random = () => {
+  let x = Math.sin(seed++) * 10000;
+  return x - Math.floor(x);
+};
+
+const parse = (raw) => {
+  const el = document.createElement('html');
+  el.innerHTML = raw;
+  
+  datasets = Array.from(el.querySelectorAll('.view-content table tr'))
+    .slice(1)
+    .map(tr => {
+      const tds = Array.from(tr.querySelectorAll('td'));
+
+      if(tds.length !== 4) { return; }
+
+      return {
+        'Name': tds[0].innerHTML,
+        'Description': tds[1].innerHTML,
+        'Jurisdiction': tds[2].innerText,
+        'Link': tds[3].innerHTML,
+      };
+    })
+    .filter(datum => typeof datum === 'object')
+    .reduce((obj, datum) => {
+      const jurisdiction = datum['Jurisdiction'].trim();
+
+      if(!(jurisdiction in obj)) {
+        obj[jurisdiction] = [];
+      }
+
+      obj[jurisdiction].push(datum);
+
+      return obj;
+    }, {});
+
+  jurisdictions = Object.keys(datasets);
+
+  jurisDiv.innerHTML = '';
+  jurisdictions.forEach(j => {
+    jurisDiv.innerHTML += `
+      <label><input type="checkbox" value="${j}" checked/> ${j}</label><br/>
+    `;
+  });
+
+  applyFilters();
+
+  Array.from(jurisDiv.querySelectorAll('input')).forEach(i => {
+    i.addEventListener('click', event => {
+      const j = event.target.value;
+
+      if(event.target.checked) {
+        jurisdictions.push(j);
+      } else {
+        jurisdictions.splice(jurisdictions.indexOf(j), 1);
+      }
+
+      applyFilters();
+      displayRandom();
+    });
+  });
+
+  displayRandom();
+
+  switc.addEventListener('click', displayRandom);
+  seedEl.addEventListener('input', event => {
+    seed = event.target.value;
+    displayRandom();
+  });
+};
+
+const applyFilters = () => {
+  filteredDatasets = jurisdictions.reduce((arr, j) => {
+    return arr.concat(datasets[j]);
+  }, []);
+}
+
+const displayRandom = () => {
+  const datum = filteredDatasets[Math.floor(random() * filteredDatasets.length)];
+
+  let html = '';
+
+  for(k in datum) {
+    html += `<p><strong>${k}</strong><br/>${datum[k]}</p>`;
+  }
+
+  display.innerHTML = html;
+}
+
+{
+  const err = () => {
+    console.error('Failed to download datasets.html.');
+  };
+
+  const req = new XMLHttpRequest();
+  req.open('GET', './datasets.html');
+  req.onload = () => {
+    if(req.status === 200) {
+      parse(req.response);
+    } else {
+      err();
+    }
+  };
+  req.onerror = err;
+  req.send();
+}
+</script>
+  </body>
+</html>
